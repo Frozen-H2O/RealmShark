@@ -228,6 +228,25 @@ public class IconDpsGUI extends DisplayDpsGUI {
             );
             JLabel nameLabel = new JLabel(name);
             JLabel dpsDataLabel = new JLabel(s2);
+
+            // Apply color based on guarded damage percentage and total damage threshold
+            Color textColor = null;
+            float blastedPercent = dmg.oryx3GuardDmg ? ((float) dmg.counterDmg / dmg.damage) * 100 : 0;
+            if (blastedPercent >= 25f)
+                textColor = Color.RED;
+            else if (blastedPercent >= 15f) {
+                // Orange to red gradient for 15-25% guarded damage
+                float intensity = (blastedPercent - 15f) / 10f;
+                int red = 255;
+                int green = (int) (165 - (intensity * 165));
+                int blue = 0;
+                textColor = new Color(red, green, blue);
+            }
+
+            if (textColor != null) {
+                nameLabel.setForeground(textColor);
+                dpsDataLabel.setForeground(textColor);
+            }
             JLabel deathNexusLabel = new JLabel();
             for (int id : entity.playerDropped.keySet()) {
                 if (dmg.owner.id == id) {
@@ -256,6 +275,9 @@ public class IconDpsGUI extends DisplayDpsGUI {
                 }
             }
             JLabel counterLabel = new JLabel(extra);
+            // Apply color to counter label as well
+            if (textColor != null)
+                counterLabel.setForeground(textColor);
 
             playerIconLabel.setHorizontalTextPosition(SwingConstants.LEFT);
             ArrayList<Component> list = new ArrayList<>();
