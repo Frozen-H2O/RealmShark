@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.*;
 import java.util.List;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.StringSelection;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
@@ -35,11 +37,15 @@ public class IconDpsGUI extends DisplayDpsGUI {
         1,
         BufferedImage.TYPE_INT_ARGB
     );
+    private final JButton copyGuardedButton = new JButton("Copy Blasters");
+    private List<Entity> lastEntities = Collections.emptyList();
+    private MapInfoPacket lastMap;
 
     public IconDpsGUI(TomatoData data) {
         this.data = data;
 
         setLayout(new BorderLayout());
+        copyGuardedButton.addActionListener(e -> copyGuardedToClipboard());
         charPanel = new JPanel();
         charPanel.setLayout(new GridBagLayout());
         charPanel.setLayout(new BoxLayout(charPanel, BoxLayout.Y_AXIS));
@@ -98,9 +104,71 @@ public class IconDpsGUI extends DisplayDpsGUI {
         }
     }
 
+    public JButton getCopyGuardedButton() {
+        return copyGuardedButton;
+    }
+
     private void guiUpdate() {
         validate();
         repaint();
+    }
+
+    private void copyGuardedToClipboard() {
+        if (lastEntities == null || lastEntities.isEmpty()) {
+            return;
+        }
+
+        StringBuilder out = new StringBuilder();
+
+        for (Entity entity : lastEntities) {
+            if (entity == null)
+                continue;
+
+            List<Damage> playerDamageList = entity.getPlayerDamageList();
+            if (playerDamageList == null || playerDamageList.isEmpty())
+                continue;
+
+            int totalBossDamage = 0;
+            for (Damage dmg : playerDamageList)
+                totalBossDamage += dmg.damage;
+
+            for (Damage dmg : playerDamageList) {
+                if (dmg == null || dmg.owner == null)
+                    continue;
+
+                int filter = Filter.filter(dmg.owner, data.player);
+                if (Filter.shouldFilter() && filter != 1)
+                    continue;
+
+                boolean hasGuardedDamage = dmg.oryx3GuardDmg;
+                if (!hasGuardedDamage || dmg.damage <= 0)
+                    continue;
+
+                float playerDamagePercentage = totalBossDamage > 0 ? ((float) dmg.damage / totalBossDamage) * 100f : 0f;
+                if (playerDamagePercentage < 1.5f)
+                    continue;
+
+                float guardedDamagePercentage = ((float) dmg.counterDmg / (float) dmg.damage) * 100f;
+                if (guardedDamagePercentage < 15f)
+                    continue;
+
+                String name = dmg.owner.name();
+                String totalDmgStr = df.format(dmg.damage);
+                String guardedDmgStr = df.format(dmg.counterDmg);
+                String guardedPctStr = String.format(Locale.US, "%.2f%%", guardedDamagePercentage);
+
+                out.append(String.format("%s: %s [ %s / %s ]\n", name, guardedPctStr, guardedDmgStr, totalDmgStr));
+            }
+        }
+
+        String result = out.toString().trim();
+        if (result.isEmpty()) {
+            result = "No players exceeded 15% guarded damage.";
+        }
+
+        StringSelection selection = new StringSelection(result);
+        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+        clipboard.setContents(selection, selection);
     }
 
     private static JPanel createMainBox(
@@ -158,6 +226,8 @@ public class IconDpsGUI extends DisplayDpsGUI {
         for (int i = 0; i < panels.length; i++) {
             panels[i] = new ArrayList<>();
         }
+
+        int counterColumnIndex = -1;
         for (Damage dmg : playerDamageList) {
             int filter = Filter.filter(dmg.owner, player);
 
@@ -288,6 +358,10 @@ public class IconDpsGUI extends DisplayDpsGUI {
             list.add(counterLabel);
             list.add(inv);
 
+            if (counterColumnIndex == -1) {
+                counterColumnIndex = list.indexOf(counterLabel);
+            }
+
             JPanel pp = new JPanel();
             pp.setLayout(new BoxLayout(pp, BoxLayout.X_AXIS));
             for (int i = 0; i < list.size(); i++) {
@@ -298,7 +372,7 @@ public class IconDpsGUI extends DisplayDpsGUI {
                     pref[i] = width;
                 }
                 JPanel ppp = new JPanel();
-                if (i == 4 && extra.length() > 0) {
+                if (i == counterColumnIndex && !extra.isEmpty()) {
                     ppp.setLayout(new BoxLayout(ppp, BoxLayout.X_AXIS));
                     ppp.add(Box.createHorizontalGlue());
                 }
@@ -531,6 +605,8 @@ public class IconDpsGUI extends DisplayDpsGUI {
         boolean isLive
     ) {
         this.notifications = deathNotifications;
+        this.lastEntities = sortedEntityHitList;
+        this.lastMap = map;
         updateDps(map, sortedEntityHitList, totalDungeonPcTime);
         guiUpdate();
     }

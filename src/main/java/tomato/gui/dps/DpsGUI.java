@@ -30,6 +30,7 @@ public class DpsGUI extends JPanel {
     private int index = 0;
     private JComboBox<String> filterComboBox;
     private HashMap<String, String> filterList = new HashMap<>();
+    private JButton copyBlastersBtn;
 
     public DpsGUI(TomatoData data) {
         INSTANCE = this;
@@ -64,6 +65,10 @@ public class DpsGUI extends JPanel {
 //            DpsDisplayOptions.nameFilter = selected;
 //            updateGui();
 //        });
+        // Initialize displays early so we can reuse the Icon display's button
+        displayString = new StringDpsGUI(data);
+        displayIcon = new IconDpsGUI(data);
+
         JButton addFilter = new JButton("+");
         addFilter.addActionListener(e -> openFilter());
         filterComboBox = new JComboBox<>(new String[]{DISABLE_FILTER});
@@ -76,6 +81,10 @@ public class DpsGUI extends JPanel {
         dpsTopPanel.add(addFilter);
         dpsTopPanel.add(Box.createRigidArea(new Dimension(10, 0)));
         dpsTopPanel.add(filterComboBox);
+        dpsTopPanel.add(Box.createRigidArea(new Dimension(10, 0)));
+        copyBlastersBtn = displayIcon.getCopyGuardedButton();
+        copyBlastersBtn.setVisible(false);
+        dpsTopPanel.add(copyBlastersBtn);
         dpsTopPanel.add(Box.createRigidArea(new Dimension(10, 0)));
         dpsTopPanel.add(prev);
         dpsTopPanel.add(dList);
@@ -90,8 +99,6 @@ public class DpsGUI extends JPanel {
         center.setLayout(new BorderLayout());
         add(center, BorderLayout.CENTER);
 
-        displayString = new StringDpsGUI(data);
-        displayIcon = new IconDpsGUI(data);
         centerDisplay = displayIcon;
         setCenterDisplay();
     }
@@ -158,8 +165,33 @@ public class DpsGUI extends JPanel {
 
     private void renderData(MapInfoPacket map, Entity[] entityHitList, ArrayList<NotificationPacket> notifications, long totalDungeonPcTime, boolean b) {
         setCenterDisplay();
+        updateCopyBlastersVisibility(entityHitList);
         List<Entity> sortedEntityHitList = getSortedEntityList(entityHitList);
         centerDisplay.renderData(map, sortedEntityHitList, notifications, totalDungeonPcTime, b);
+    }
+
+    private void updateCopyBlastersVisibility(Entity[] entityHitList) {
+        if (copyBlastersBtn == null)
+            return;
+        boolean hasGuard = false;
+        if (entityHitList != null) {
+            for (Entity e : entityHitList) {
+                if (e == null)
+                    continue;
+                java.util.List<tomato.backend.data.Damage> list = e.getPlayerDamageList();
+                if (list == null)
+                    continue;
+                for (tomato.backend.data.Damage dmg : list) {
+                    if (dmg != null && dmg.oryx3GuardDmg) {
+                        hasGuard = true;
+                        break;
+                    }
+                }
+                if (hasGuard)
+                    break;
+            }
+        }
+        copyBlastersBtn.setVisible(hasGuard);
     }
 
     private List<Entity> getSortedEntityList(Entity[] entityHitList) {
